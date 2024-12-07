@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/sha512"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,10 +10,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 )
-
-type Response struct {
-	Response string `json:"response"`
-}
 
 func SHA512(text string) string {
 	algorithm := sha512.New()
@@ -32,7 +27,6 @@ func signUp(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
 
 	email := r.URL.Query().Get("email")
 	password := r.URL.Query().Get("password")
@@ -54,9 +48,7 @@ func signUp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if emailExists {
-		var response Response
-		response.Response = "Email is already in use."
-		json.NewEncoder(w).Encode(response)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
@@ -65,6 +57,7 @@ func signUp(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	w.WriteHeader(http.StatusCreated)
 }
 
 func logIn(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +69,6 @@ func logIn(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
 
 	email := r.URL.Query().Get("email")
 	password := r.URL.Query().Get("password")
@@ -88,17 +80,14 @@ func logIn(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close(context.Background())
 
 	err = conn.QueryRow(context.Background(), "select * from authentication where email = $1, password = $2", email, SHA512(password)).Scan()
-	var response Response
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			response.Response = "Wrong email or password"
-			json.NewEncoder(w).Encode(response)
+			w.WriteHeader(http.StatusUnauthorized)
 		} else {
 			log.Fatal(err)
 		}
 	}
-	response.Response = "OK"
-	json.NewEncoder(w).Encode(response)
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func main() {
