@@ -44,13 +44,18 @@ func signUp(w http.ResponseWriter, r *http.Request) {
 
 	var check string
 	err = conn.QueryRow(context.Background(), "select email from authentication where email = $1;", email).Scan(&check)
+	emailExists := true
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
+			emailExists = false
 		} else {
 			log.Fatal(err)
 		}
+	}
+
+	if emailExists {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
 	hashedPassword := SHA512(password)
