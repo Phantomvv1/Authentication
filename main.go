@@ -37,23 +37,24 @@ func signUp(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close(context.Background())
 
-	err = conn.QueryRow(context.Background(), "select email from authentication where email = $1", email).Scan()
-	emailExists := true
+	_, err = conn.Exec(context.Background(), "create table if not exists authentication (email text, password text);")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var check string
+	err = conn.QueryRow(context.Background(), "select email from authentication where email = $1;", email).Scan(&check)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			emailExists = false
+			w.WriteHeader(http.StatusUnauthorized)
+			return
 		} else {
 			log.Fatal(err)
 		}
 	}
 
-	if emailExists {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-
 	hashedPassword := SHA512(password)
-	_, err = conn.Exec(context.Background(), "insert into authentication (email, password) values ($1, $2)", email, hashedPassword)
+	_, err = conn.Exec(context.Background(), "insert into authentication (email, password) values ($1, $2);", email, hashedPassword)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -79,13 +80,19 @@ func logIn(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close(context.Background())
 
-	err = conn.QueryRow(context.Background(), "select * from authentication where email = $1, password = $2", email, SHA512(password)).Scan()
+	var passwordCheck string
+	err = conn.QueryRow(context.Background(), "select password from authentication a where a.email = $1;", email).Scan(&passwordCheck)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			w.WriteHeader(http.StatusUnauthorized)
+			return
 		} else {
 			log.Fatal(err)
 		}
+	}
+
+	if SHA512(password) != passwordCheck {
+		w.WriteHeader(http.StatusUnauthorized)
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
